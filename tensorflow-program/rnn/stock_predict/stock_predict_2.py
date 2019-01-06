@@ -1,27 +1,35 @@
-#coding=gbk
-'''
-Created on 2017年2月20日
+# coding=gbk
 
-@author: Lu.yipiao
-'''
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
-#定义常量
-rnn_unit=10       #hidden layer units
-input_size=7
-output_size=1
-lr=0.0006         #学习率
-#——————————————————导入数据——————————————————————
-f=open('dataset_2.csv') 
-df=pd.read_csv(f)     #读入股票数据
-data=df.iloc[:,2:10].values  #取第3-10列
+##定义常量
+rnn_unit = 10       # hidden layer units
+input_size = 7
+output_size = 1
+lr=0.0006 # 学习率
+testtime = 2800
+
+# ——————————————————导入数据——————————————————————
+# 读入股票数据
+f = open('./dataset/399300.csv', encoding= 'gbk')
+df = pd.read_csv(f, dtype =
+                            {'change': np.float64,
+                             'close': np.float64,
+                             'high': np.float64,
+                             'label': np.float64,
+                             'low': np.float64,
+                             'money': np.float64,
+                             'open': np.float64,
+                             'volume': np.float64})
+
+data = df.iloc[:,2:10].values  # 取第3-10列
 
 
-#获取训练集
-def get_train_data(batch_size=60,time_step=20,train_begin=0,train_end=5800):
+# 获取训练集
+def get_train_data(batch_size=80,time_step=15,train_begin=0,train_end=testtime):
     batch_index=[]
     data_train=data[train_begin:train_end]
     normalized_train_data=(data_train-np.mean(data_train,axis=0))/np.std(data_train,axis=0)  #标准化
@@ -37,15 +45,14 @@ def get_train_data(batch_size=60,time_step=20,train_begin=0,train_end=5800):
     return batch_index,train_x,train_y
 
 
-
-#获取测试集
-def get_test_data(time_step=20,test_begin=5800):
+# 获取测试集
+def get_test_data(time_step=15,test_begin=testtime):
     data_test=data[test_begin:]
     mean=np.mean(data_test,axis=0)
     std=np.std(data_test,axis=0)
     normalized_test_data=(data_test-mean)/std  #标准化
     size=(len(normalized_test_data)+time_step-1)//time_step  #有size个sample 
-    test_x,test_y=[],[]  
+    test_x,test_y=[],[]
     for i in range(size-1):
        x=normalized_test_data[i*time_step:(i+1)*time_step,:7]
        y=normalized_test_data[i*time_step:(i+1)*time_step,7]
@@ -56,8 +63,7 @@ def get_test_data(time_step=20,test_begin=5800):
     return mean,std,test_x,test_y
 
 
-
-#——————————————————定义神经网络变量——————————————————
+# ——————————————————定义神经网络变量——————————————————
 #输入层、输出层权重、偏置
 
 weights={
@@ -69,13 +75,14 @@ biases={
         'out':tf.Variable(tf.constant(0.1,shape=[1,]))
        }
 
-#——————————————————定义神经网络变量——————————————————
+
+# ——————————————————定义神经网络变量——————————————————
 def lstm(X):     
     batch_size=tf.shape(X)[0]
     time_step=tf.shape(X)[1]
     w_in=weights['in']
-    b_in=biases['in']  
-    input=tf.reshape(X,[-1,input_size])  #需要将tensor转成2维进行计算，计算后的结果作为隐藏层的输入
+    b_in=biases['in']
+    input=tf.reshape(X,[-1,input_size]) #需要将tensor转成2维进行计算，计算后的结果作为隐藏层的输入
     input_rnn=tf.matmul(input,w_in)+b_in
     input_rnn=tf.reshape(input_rnn,[-1,time_step,rnn_unit])  #将tensor转成3维，作为lstm cell的输入
     cell=tf.nn.rnn_cell.BasicLSTMCell(rnn_unit)
@@ -88,43 +95,45 @@ def lstm(X):
     return pred,final_states
 
 
-
-#——————————————————训练模型——————————————————
-def train_lstm(batch_size=80,time_step=15,train_begin=2000,train_end=5800):
+# ——————————————————训练模型——————————————————
+def train_lstm(batch_size=80,time_step=15,train_begin=800,train_end=testtime):
     X=tf.placeholder(tf.float32, shape=[None,time_step,input_size])
     Y=tf.placeholder(tf.float32, shape=[None,time_step,output_size])
     batch_index,train_x,train_y=get_train_data(batch_size,time_step,train_begin,train_end)
-    pred,_=lstm(X)
+    with tf.variable_scope('lstm'):
+        pred, _ = lstm(X)
     #损失函数
     loss=tf.reduce_mean(tf.square(tf.reshape(pred,[-1])-tf.reshape(Y, [-1])))
     train_op=tf.train.AdamOptimizer(lr).minimize(loss)
     saver=tf.train.Saver(tf.global_variables(),max_to_keep=15)
-    module_file = tf.train.latest_checkpoint()    
+    module_file = tf.train.latest_checkpoint('./hushen300/')
     with tf.Session() as sess:
         #sess.run(tf.global_variables_initializer())
         saver.restore(sess, module_file)
         #重复训练10000次
-        for i in range(2000):
+        for i in range(401):
             for step in range(len(batch_index)-1):
-                _,loss_=sess.run([train_op,loss],feed_dict={X:train_x[batch_index[step]:batch_index[step+1]],Y:train_y[batch_index[step]:batch_index[step+1]]})
+                _,loss_=sess.run([train_op,loss],feed_dict={X:train_x[batch_index[step]:batch_index[step+1]], \
+                                                            Y:train_y[batch_index[step]:batch_index[step+1]]})
             print(i,loss_)
             if i % 200==0:
-                print("保存模型：",saver.save(sess,'stock2.model',global_step=i))
+                print("保存模型：",saver.save(sess,'./hushen300/hushen300.model',global_step=i))
 
 
 train_lstm()
 
 
-#————————————————预测模型————————————————————
+# ————————————————预测模型————————————————————
 def prediction(time_step=20):
     X=tf.placeholder(tf.float32, shape=[None,time_step,input_size])
     #Y=tf.placeholder(tf.float32, shape=[None,time_step,output_size])
     mean,std,test_x,test_y=get_test_data(time_step)
-    pred,_=lstm(X)     
+    with tf.variable_scope('lstm', reuse=tf.AUTO_REUSE):
+        pred, _ =lstm(X)
     saver=tf.train.Saver(tf.global_variables())
     with tf.Session() as sess:
         #参数恢复
-        module_file = tf.train.latest_checkpoint()
+        module_file = tf.train.latest_checkpoint('./hushen300/')
         saver.restore(sess, module_file) 
         test_predict=[]
         for step in range(len(test_x)-1):
@@ -135,9 +144,21 @@ def prediction(time_step=20):
         test_predict=np.array(test_predict)*std[7]+mean[7]
         acc=np.average(np.abs(test_predict-test_y[:len(test_predict)])/test_y[:len(test_predict)])  #偏差
         #以折线图表示结果
+        date = df.loc[testtime:, 'date'].values
+        d2 = {'date':date,'predict': test_predict, 'real':test_y}
+        d2 = {name: pd.Series(arr) for name, arr in d2.items()}
+        compare = pd.DataFrame(d2)
+        compare.to_csv('dataset/predict_hushen300.csv')
         plt.figure()
-        plt.plot(list(range(len(test_predict))), test_predict, color='b')
-        plt.plot(list(range(len(test_y))), test_y,  color='r')
+        plt.plot(list(range(len(test_predict))), test_predict, color='b', label = 'predict')
+        plt.plot(list(range(len(test_y))), test_y,  color='r', label = 'real')
+        plt.xlabel('time start from {0} to {1}'.format(date[0], date[-1]))
+        plt.ylabel('price')
+        plt.legend()
+        # plt.plot(list(date[:len(test_predict)]), test_predict, color='b')
+        # plt.plot(list(date[:len(test_y)]), test_y,  color='r')
         plt.show()
 
-prediction() 
+
+
+prediction()
