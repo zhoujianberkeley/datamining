@@ -5,16 +5,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
+path = '399300_h'
 ##定义常量
 rnn_unit = 10       # hidden layer units
 input_size = 7
 output_size = 1
 lr=0.0006 # 学习率
 testtime = 2800
+tra_num = 800
+
+initial = False
+train_or_not = True
 
 # ——————————————————导入数据——————————————————————
 # 读入股票数据
-f = open('./dataset/399300.csv', encoding= 'gbk')
+f = open('./dataset/{0}.csv'.format(path), encoding= 'gbk')
 df = pd.read_csv(f, dtype =
                             {'change': np.float64,
                              'close': np.float64,
@@ -53,7 +58,7 @@ def get_test_data(time_step=15,test_begin=testtime):
     normalized_test_data=(data_test-mean)/std  #标准化
     size=(len(normalized_test_data)+time_step-1)//time_step  #有size个sample 
     test_x,test_y=[],[]
-    for i in range(size-1):
+    for i in range(size - 1):
        x=normalized_test_data[i*time_step:(i+1)*time_step,:7]
        y=normalized_test_data[i*time_step:(i+1)*time_step,7]
        test_x.append(x.tolist())
@@ -106,25 +111,28 @@ def train_lstm(batch_size=80,time_step=15,train_begin=800,train_end=testtime):
     loss=tf.reduce_mean(tf.square(tf.reshape(pred,[-1])-tf.reshape(Y, [-1])))
     train_op=tf.train.AdamOptimizer(lr).minimize(loss)
     saver=tf.train.Saver(tf.global_variables(),max_to_keep=15)
-    module_file = tf.train.latest_checkpoint('./hushen300/')
+    if initial == False:
+        module_file = tf.train.latest_checkpoint('./{0}/'.format(path))
     with tf.Session() as sess:
-        #sess.run(tf.global_variables_initializer())
-        saver.restore(sess, module_file)
+        if initial:
+            sess.run(tf.global_variables_initializer())
+        else:
+            saver.restore(sess, module_file)
         #重复训练10000次
-        for i in range(401):
+        for i in range(tra_num):
             for step in range(len(batch_index)-1):
                 _,loss_=sess.run([train_op,loss],feed_dict={X:train_x[batch_index[step]:batch_index[step+1]], \
                                                             Y:train_y[batch_index[step]:batch_index[step+1]]})
             print(i,loss_)
             if i % 200==0:
-                print("保存模型：",saver.save(sess,'./hushen300/hushen300.model',global_step=i))
+                print("保存模型：",saver.save(sess,'./{0}/{1}.model'.format(path, path),global_step=i))
 
-
-train_lstm()
+if train_or_not or initial:
+    train_lstm()
 
 
 # ————————————————预测模型————————————————————
-def prediction(time_step=20):
+def prediction(time_step=15):
     X=tf.placeholder(tf.float32, shape=[None,time_step,input_size])
     #Y=tf.placeholder(tf.float32, shape=[None,time_step,output_size])
     mean,std,test_x,test_y=get_test_data(time_step)
@@ -133,11 +141,12 @@ def prediction(time_step=20):
     saver=tf.train.Saver(tf.global_variables())
     with tf.Session() as sess:
         #参数恢复
-        module_file = tf.train.latest_checkpoint('./hushen300/')
+        module_file = tf.train.latest_checkpoint('./{0}/'.format(path))
         saver.restore(sess, module_file) 
         test_predict=[]
-        for step in range(len(test_x)-1):
-          prob=sess.run(pred,feed_dict={X:[test_x[step]]})   
+        for step in range(len(test_x) - 1):
+
+          prob=sess.run(pred,feed_dict = {X:[test_x[step]]})
           predict=prob.reshape((-1))
           test_predict.extend(predict)
         test_y=np.array(test_y)*std[7]+mean[7]
@@ -148,7 +157,7 @@ def prediction(time_step=20):
         d2 = {'date':date,'predict': test_predict, 'real':test_y}
         d2 = {name: pd.Series(arr) for name, arr in d2.items()}
         compare = pd.DataFrame(d2)
-        compare.to_csv('dataset/predict_hushen300.csv')
+        compare.to_csv('dataset/predict_{0}.csv'.format(path))
         plt.figure()
         plt.plot(list(range(len(test_predict))), test_predict, color='b', label = 'predict')
         plt.plot(list(range(len(test_y))), test_y,  color='r', label = 'real')

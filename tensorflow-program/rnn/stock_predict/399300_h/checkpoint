@@ -1,0 +1,5 @@
+model_checkpoint_path: "399300_h.model-600"
+all_model_checkpoint_paths: "399300_h.model-0"
+all_model_checkpoint_paths: "399300_h.model-200"
+all_model_checkpoint_paths: "399300_h.model-400"
+all_model_checkpoint_paths: "399300_h.model-600"

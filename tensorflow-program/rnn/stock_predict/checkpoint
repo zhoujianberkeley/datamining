@@ -1,4 +1,0 @@
-model_checkpoint_path: "stock2.model-400"
-all_model_checkpoint_paths: "stock2.model-0"
-all_model_checkpoint_paths: "stock2.model-200"
-all_model_checkpoint_paths: "stock2.model-400"
